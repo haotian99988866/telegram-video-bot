@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+video_index.json
+channel_export.json
+.DS_Store
