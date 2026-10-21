@@ -15,8 +15,14 @@ def parse_title_info(text: str) -> Tuple[str, Optional[int], str]:
     text = text.strip() or "未命名视频"
     name_match = re.search(r"《(.+?)》", text)
     series_name = name_match.group(1).strip() if name_match else "其他"
-    ep_match = re.search(r"(?:第|EP|集数)\s*(\d+)", text, re.I)
-    episode = int(ep_match.group(1)) if ep_match else None
+    
+    # 增强版：匹配 第X集 / 第XX集 / EPXX / 集数XX / 第X集XX
+    ep_match = re.search(r"(?:第|EP|集数)\s*(?:[一二三四五六七八九十百千万]+|(\d+))\s*集", text, re.I)
+    if not ep_match:
+        # 备用：直接提取标题里的「数字+集」或末尾数字
+        ep_match = re.search(r"(\d+)\s*集", text, re.I) or re.search(r"(\d+)\s*(?!.*\d)", text)
+    
+    episode = int(ep_match.group(1)) if ep_match and ep_match.group(1) else None
     return series_name, episode, text
 
 def _save_index():
