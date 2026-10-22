@@ -10,7 +10,32 @@ class Nav(CallbackData, prefix="nav"):
     page: int = 1
     ep: int = 0
     vid: int = 0
-    cat: str = ""  # ← 新增
+    cat: str = ""
+
+
+def build_category_menu() -> InlineKeyboardMarkup:
+    cats = db.get_all_categories()
+    buttons = []
+    for cat in cats:
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"📂 {cat}",
+                callback_data=Nav(act="cat", cat=cat).pack()
+            )
+        ])
+    buttons.append([
+        InlineKeyboardButton(
+            text="📁 全部剧集",
+            callback_data=Nav(act="all", page=1).pack()
+        )
+    ])
+    buttons.append([
+        InlineKeyboardButton(
+            text="🔍 搜索剧集",
+            switch_inline_query_current_chat=""
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def build_series_menu(page: int = 1, list_override=None) -> InlineKeyboardMarkup:
@@ -33,16 +58,17 @@ def build_series_menu(page: int = 1, list_override=None) -> InlineKeyboardMarkup
     nav_row = []
     if page > 1:
         nav_row.append(InlineKeyboardButton(
-            text="◀️", callback_data=Nav(act="series", page=page - 1).pack()
+            text="◀️", callback_data=Nav(act="all", page=page - 1).pack()
         ))
     if page < total_pages:
         nav_row.append(InlineKeyboardButton(
-            text="▶️", callback_data=Nav(act="series", page=page + 1).pack()
+            text="▶️", callback_data=Nav(act="all", page=page + 1).pack()
         ))
     if nav_row:
         buttons.append(nav_row)
     buttons.append([InlineKeyboardButton(
-        text="🔍 搜索剧集", switch_inline_query_current_chat=""
+        text="⬅️ 返回分类",
+        callback_data=Nav(act="home").pack()
     )])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -76,7 +102,8 @@ def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
             row = []
     nav_row = [
         InlineKeyboardButton(
-            text="📂 返回", callback_data=Nav(act="series", page=1).pack()
+            text="⬅️ 返回",
+            callback_data=Nav(act="home").pack()
         )
     ]
     if page > 1:
@@ -88,28 +115,4 @@ def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
             text="▶️", callback_data=Nav(act="eps", name=series_name, page=page + 1).pack()
         ))
     buttons.append(nav_row)
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-def build_category_menu() -> InlineKeyboardMarkup:
-    """构建分类主菜单"""
-    from database import get_all_categories
-    cats = get_all_categories()
-    if not cats:
-        cats = ["电视剧", "综艺", "电影", "动漫", "其他"]
-    buttons = []
-    for cat in cats:
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"📂 {cat}",
-                callback_data=Nav(act="cat", cat=cat).pack()
-            )
-        ])
-    buttons.append([
-        InlineKeyboardButton(
-            text="📁 全部剧集",
-            callback_data=Nav(act="series", page=1).pack()
-        )
-    ])
-    buttons.append([InlineKeyboardButton(
-        text="🔍 搜索剧集", switch_inline_query_current_chat=""
-    )])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
