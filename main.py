@@ -1,13 +1,13 @@
 import asyncio
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ContentType, UpdateType
 from config import config
 import database as db
 from keyboard import Nav, build_series_menu, build_episode_menu, build_category_menu
-from database import get_all_categories, get_series_by_category
+from database import get_series_by_category
 
 bot = Bot(
     token=config.BOT_TOKEN,
@@ -15,7 +15,7 @@ bot = Bot(
 )
 dp = Dispatcher()
 
-# 统一频道ID格式：支持 @xxx 和 -100xxx 两种写法
+# 统一频道ID格式
 TARGET_CHANNEL_ID = config.CHANNEL_ID
 if TARGET_CHANNEL_ID.startswith("-"):
     TARGET_CHANNEL_ID = int(TARGET_CHANNEL_ID)
@@ -23,7 +23,6 @@ if TARGET_CHANNEL_ID.startswith("-"):
 
 # ─── 核心：监听频道新视频 ───
 async def process_new_video_message(msg: Message):
-    """统一处理新视频入库逻辑"""
     title = (msg.caption or "").strip() or f"视频 {msg.message_id}"
     file_id = msg.video.file_id
     duration = msg.video.duration or 0
@@ -50,7 +49,6 @@ async def process_new_video_message(msg: Message):
         )
 
 
-# 处理器1：普通消息模式
 @dp.message(
     F.chat.id == TARGET_CHANNEL_ID,
     F.content_type == ContentType.VIDEO
@@ -59,7 +57,6 @@ async def on_channel_video_message(msg: Message):
     await process_new_video_message(msg)
 
 
-# 处理器2：频道广播模式
 @dp.channel_post(
     F.chat.id == TARGET_CHANNEL_ID,
     F.content_type == ContentType.VIDEO
@@ -92,7 +89,7 @@ async def do_search(msg: Message):
     )
 
 
-# ✅ 修正：回调处理函数参数名保持一致 + 补充缺失返回
+# ✅ 修复：统一参数名，删除重复代码
 @dp.callback_query(Nav.filter())
 async def on_nav(cq: CallbackQuery, data: Nav):
     # 返回首页分类
@@ -106,7 +103,7 @@ async def on_nav(cq: CallbackQuery, data: Nav):
         await cq.answer()
         return
 
-    # 进入分类
+    # 进入分类 —— 点击「电视剧」走这里 ✅
     if data.act == "cat":
         series_list = get_series_by_category(data.cat)
         if not series_list:
@@ -146,46 +143,6 @@ async def on_nav(cq: CallbackQuery, data: Nav):
     # 播放视频
     if data.act == "play":
         video = db.get_video_by_id(data.vid)
-        if not video or not video.get("file_id"):
-            await cq.answer("该集暂未收录，请等待更新", show_alert=True)
-            return
-        await cq.message.answer_video(
-            video=video["file_id"],
-            caption=(
-                f"📺 {video['series']} 第{video['episode']}集\n"
-                f"📹 {video['title']}\n"
-                f"⏱ 时长：{video['duration']//60}:{video['duration']%60:02d}"
-            )
-        )
-        await cq.answer("播放已开始 ✅")
-        return
-
-    # 新增：返回首页
-    if callback_data.act == "home":
-        await cq.message.edit_text(
-            "📂 视频目录\n选择分类浏览，新视频自动同步 ✅",
-            reply_markup=build_category_menu()
-        )
-        await cq.answer()
-        return
-    if callback_data.act == "series":
-        await cq.message.edit_text(
-            "📺 全部剧集",
-            reply_markup=build_series_menu(page=callback_data.page)
-        )
-        await cq.answer()
-        return
-
-    if callback_data.act == "eps":
-        await cq.message.edit_text(
-            f"📺 {callback_data.name}\n已收录自动展示全部集数，⏳ 为待补",
-            reply_markup=build_episode_menu(callback_data.name, page=callback_data.page)
-        )
-        await cq.answer()
-        return
-
-    if callback_data.act == "play":
-        video = db.get_video_by_id(callback_data.vid)
         if not video or not video.get("file_id"):
             await cq.answer("该集暂未收录，请等待更新", show_alert=True)
             return
