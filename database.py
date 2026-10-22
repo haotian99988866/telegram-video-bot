@@ -153,28 +153,14 @@ def search_series_by_keyword(keyword: str) -> List[str]:
 def get_video_by_id(vid: int) -> Optional[Dict]:
     return next((v for v in video_list if v["id"] == vid), None)
 
-def get_all_categories() -> List[str]:
-    """获取所有分类"""
-    cats = set()
-    for v in video_list:
-        cats.add(v.get("media_type", "其他"))
-    return sorted(cats)
-
-def get_series_by_category(category: str) -> List[str]:
-    """按分类获取剧名列表"""
-    names = set()
-    for v in video_list:
-        if v.get("media_type", "其他") == category:
-            names.add(v["series"])
-    return sorted(names)
-def get_all_categories() -> List[str]:
+def get_all_categories():
     seen = set()
     order = ["电视剧", "综艺", "电影", "动漫", "其他"]
     for v in video_list:
         seen.add(v.get("media_type", "其他"))
     return [c for c in order if c in seen] + sorted(seen - set(order))
 
-def get_series_by_category(category: str) -> List[str]:
+def get_series_by_category(category):
     names = set()
     for v in video_list:
         if v.get("media_type", "其他") == category:
