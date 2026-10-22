@@ -66,18 +66,25 @@ def build_series_menu(page: int = 1, list_override=None) -> InlineKeyboardMarkup
 def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
     items = db.get_series_display(series_name)
     if not items:
-        return InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="暂无集数", callback_data="noop")
-        ]])
+        # ✅ 暂无集数也显示返回按钮
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⚠️ 暂无已收录集数", callback_data="noop")],
+            [InlineKeyboardButton(text="⬅️ 返回", callback_data="home|home|1")]
+        ])
+
     total_pages = (len(items) - 1) // config.PER_PAGE + 1
     start = (page - 1) * config.PER_PAGE
     page_items = items[start : start + config.PER_PAGE]
+
     buttons = []
     row = []
     for idx, it in enumerate(page_items):
         ep = it["episode"]
-        vid = it["video"]["id"]
-        if it["available"]:
+        available = it["available"]
+        video_info = it.get("video")
+        vid = video_info.get("id") if video_info else 0
+
+        if available and vid:
             btn = InlineKeyboardButton(
                 text=f"✅ 第{ep}集",
                 callback_data=f"play|{series_name}|{ep}|{vid}"
@@ -91,11 +98,9 @@ def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
         if len(row) == 3 or idx == len(page_items) - 1:
             buttons.append(row)
             row = []
+
     nav_row = [
-        InlineKeyboardButton(
-            text="⬅️ 返回",
-            callback_data="home|home|1"
-        )
+        InlineKeyboardButton(text="⬅️ 返回", callback_data="home|home|1")
     ]
     if page > 1:
         nav_row.insert(0, InlineKeyboardButton(
@@ -106,4 +111,5 @@ def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
             text="▶️", callback_data=f"eps|{series_name}|{page+1}"
         ))
     buttons.append(nav_row)
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)

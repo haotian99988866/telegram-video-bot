@@ -14,7 +14,6 @@ bot = Bot(
     default=DefaultBotProperties(parse_mode="Markdown")
 )
 dp = Dispatcher()
-
 TARGET_CHANNEL_ID = config.CHANNEL_ID
 if TARGET_CHANNEL_ID.startswith("-"):
     TARGET_CHANNEL_ID = int(TARGET_CHANNEL_ID)
@@ -32,19 +31,19 @@ async def process_new_video_message(msg: Message):
         file_name=getattr(msg.video, "file_name", ""),
         size=getattr(msg.video, "file_size", 0)
     )
-    if added and config.ADMIN_ID:
-        series = added["series"]
-        ep = added["episode"]
-        total = db.series_info.get(series, {}).get("total", ep or 1)
-        await bot.send_message(
-            config.ADMIN_ID,
-            f"✅ 自动收录成功\n"
-            f"📺 剧名：{series}\n"
-            f"📝 集数：第{ep}集 / 共{total}集\n"
-            f"📹 标题：{added['title']}\n"
-            f"⏱ 时长：{duration//60}:{duration%60:02d}\n"
-            f"🔗 目录已实时刷新，用户可直接播放"
-        )
+    # if added and config.ADMIN_ID:
+    #     series = added["series"]
+    #     ep = added["episode"]
+    #     total = db.series_info.get(series, {}).get("total", ep or 1)
+    #     await bot.send_message(
+    #         config.ADMIN_ID,
+    #         f"✅ 自动收录成功\n"
+    #         f"📺 剧名：{series}\n"
+    #         f"📝 集数：第{ep}集 / 共{total}集\n"
+    #         f"📹 标题：{added['title']}\n"
+    #         f"⏱ 时长：{duration//60}:{duration%60:02d}\n"
+    #         f"🔗 目录已实时刷新，用户可直接播放"
+    #     )
 
 
 @dp.message(F.chat.id == TARGET_CHANNEL_ID, F.content_type == ContentType.VIDEO)
@@ -80,7 +79,6 @@ async def do_search(msg: Message):
     )
 
 
-# ✅ 核心：用简单字符串拆分，100% 匹配
 @dp.callback_query(F.data != "noop")
 async def on_nav(cq: CallbackQuery):
     data = cq.data.split("|")
@@ -88,7 +86,6 @@ async def on_nav(cq: CallbackQuery):
     param1 = data[1] if len(data) > 1 else ""
     param2 = int(data[2]) if len(data) > 2 and data[2].isdigit() else 1
     param3 = int(data[3]) if len(data) > 3 and data[3].isdigit() else 0
-
     print(f"回调: act={act}, p1={param1}, p2={param2}")
 
     if act == "home":
@@ -136,10 +133,14 @@ async def on_nav(cq: CallbackQuery):
         return
 
     if act == "play":
+        print(f"🎬 [播放请求] 开始处理 → param3={param3}")
         video = db.get_video_by_id(param3)
+        print(f"🎬 [查询结果] video={video}")
         if not video or not video.get("file_id"):
+            print(f"❌ [失败] 视频不存在或file_id为空")
             await cq.answer("该集暂未收录，请等待更新", show_alert=True)
             return
+        print(f"✅ [准备发送] 剧名={video.get('series')} 集数={video.get('episode')}")
         await cq.message.answer_video(
             video=video["file_id"],
             caption=(
@@ -149,6 +150,7 @@ async def on_nav(cq: CallbackQuery):
             )
         )
         await cq.answer("播放已开始 ✅")
+        print(f"✅ [完成] 视频发送成功")
         return
 
 
