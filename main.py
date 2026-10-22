@@ -7,6 +7,8 @@ from aiogram.enums import ContentType, UpdateType
 from config import config
 import database as db
 from keyboard import Nav, build_series_menu, build_episode_menu
+from database import get_all_categories, get_series_by_category
+from keyboard import build_category_menu
 
 bot = Bot(
     token=config.BOT_TOKEN,
@@ -74,7 +76,7 @@ async def cmd_start(msg: Message):
         f"📂 视频目录\n"
         f"共收录 {len(db.series_info)} 部剧集 / {len(db.video_list)} 个视频\n\n"
         f"选择剧集浏览，新视频自动同步 ✅",
-        reply_markup=build_series_menu()
+        reply_markup=build_category_menu()  # ← 改这里
     )
 
 
@@ -94,6 +96,34 @@ async def do_search(msg: Message):
 # ✅ 修正：回调处理函数参数名保持一致 + 补充缺失返回
 @dp.callback_query(Nav.filter())
 async def on_nav(cq: CallbackQuery, callback_data: Nav):
+    # 新增：进入分类
+    if callback_data.act == "cat":
+        cat = callback_data.cat
+        series_list = get_series_by_category(cat)
+        if not series_list:
+            await cq.message.edit_text(
+                f"📂 {cat}\n暂无内容，稍后更新~",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="◀️ 返回", callback_data=Nav(act="home").pack())
+                ]])
+            )
+            await cq.answer()
+            return
+        await cq.message.edit_text(
+            f"📂 {cat}\n共 {len(series_list)} 部作品",
+            reply_markup=build_series_menu(list_override=series_list)
+        )
+        await cq.answer()
+        return
+
+    # 新增：返回首页
+    if callback_data.act == "home":
+        await cq.message.edit_text(
+            "📂 视频目录\n选择分类浏览，新视频自动同步 ✅",
+            reply_markup=build_category_menu()
+        )
+        await cq.answer()
+        return
     if callback_data.act == "series":
         await cq.message.edit_text(
             "📺 全部剧集",
