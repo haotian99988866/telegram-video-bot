@@ -16,59 +16,50 @@ from typing import Tuple, Optional
 
 def parse_title_info(text: str) -> Tuple[str, Optional[int], str, str]:
     text = text.strip() or "未命名视频"
-    
-    # 1️⃣ 提取剧名
+
+    # 提取剧名 《xxx》
     name_match = re.search(r"《(.+?)》", text)
     series_name = name_match.group(1).strip() if name_match else "其他"
 
-    # 2️⃣ 识别类型
+    # ===== 识别类型：只匹配 #标签，普通文字不匹配 =====
     media_type = "其他"
-    if re.search(r"#电视剧|电视剧|#美剧|美剧|#英剧|英剧|#韩剧|韩剧|#日剧|日剧|剧集|剧", text):
+    if re.search(r"#电视剧|#美剧|#英剧|#韩剧|#日剧", text):
         media_type = "电视剧"
-    elif re.search(r"#综艺|综艺|真人秀|晚会|访谈|脱口秀", text):
+    elif re.search(r"#综艺", text):
         media_type = "综艺"
-    elif re.search(r"#电影|电影|影片|院线|剧场版", text):
+    elif re.search(r"#电影", text):
         media_type = "电影"
-    elif re.search(r"#动漫|动漫|动画|番剧|#日漫|日漫|#国漫|国漫", text):
+    elif re.search(r"#动漫|#动画", text):
         media_type = "动漫"
 
-    # 3️⃣ 强化集数识别 —— 兼容所有格式 ✅
+    # ===== 识别集数 =====
     episode = None
-    
-    # 格式A：第4集 / 第四集 / 第04集
-    ep_match = re.search(r"第([一二三四五六七八九十百千万\d]+)集", text)
-    if ep_match:
-        num_text = ep_match.group(1)
-        if num_text.isdigit():
-            episode = int(num_text)
-        else:
-            # 中文数字转阿拉伯（简单常用）
-            cn_map = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}
-            episode = cn_map.get(num_text)
-    
-    # 格式B：第04集04 / 第七集07 → 取后面数字
+    cn_map = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}
+
+    # 格式1：第X集
+    m = re.search(r"第([一二三四五六七八九十百千万\d]+)集", text)
+    if m:
+        s = m.group(1)
+        episode = int(s) if s.isdigit() else cn_map.get(s)
+
+    # 格式2：集后面跟数字 如 第七集07
     if not episode:
-        ep_match = re.search(r"集\s*(\d{1,3})", text)
-        if ep_match:
-            episode = int(ep_match.group(1))
-    
-    # 格式C：04集 / 第4季第2集 / S01E04
+        m = re.search(r"集\s*(\d{1,3})", text)
+        if m:
+            episode = int(m.group(1))
+
+    # 格式3：数字在前 如 07集
     if not episode:
-        ep_match = re.search(r"(\d{1,3})集", text)
-        if ep_match:
-            episode = int(ep_match.group(1))
-    
-    # 格式D：E04 / 第4集 / - 04 -
+        m = re.search(r"(\d{1,3})集", text)
+        if m:
+            episode = int(m.group(1))
+
+    # 格式4：兜底提取数字
     if not episode:
-        ep_match = re.search(r"[Ee](\d{1,3})", text)
-        if ep_match:
-            episode = int(ep_match.group(1))
-    
-    # 格式E：剧名 04 / 剧名 第4部分（兜底：连续数字当作集数）
-    if not episode:
-        ep_match = re.search(r"\b0*([1-9]\d?)\b", text.replace(series_name, ""))
-        if ep_match:
-            episode = int(ep_match.group(1))
+        without_name = text.replace(series_name, "").replace(f"《{series_name}》", "")
+        m = re.search(r"\b([1-9]\d?)\b", without_name)
+        if m:
+            episode = int(m.group(1))
 
     return series_name, episode, text, media_type
 def _save_index():
