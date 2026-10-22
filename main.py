@@ -4,7 +4,6 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ContentType, UpdateType
-
 from config import config
 import database as db
 from keyboard import Nav, build_series_menu, build_episode_menu
@@ -20,13 +19,13 @@ TARGET_CHANNEL_ID = config.CHANNEL_ID
 if TARGET_CHANNEL_ID.startswith("-"):
     TARGET_CHANNEL_ID = int(TARGET_CHANNEL_ID)
 
-# ─── 核心：监听频道新视频（同时兼容普通消息和频道广播消息）───
+
+# ─── 核心：监听频道新视频 ───
 async def process_new_video_message(msg: Message):
     """统一处理新视频入库逻辑"""
     title = (msg.caption or "").strip() or f"视频 {msg.message_id}"
     file_id = msg.video.file_id
     duration = msg.video.duration or 0
-
     added = db.add_video(
         message_id=msg.message_id,
         title=title,
@@ -35,7 +34,6 @@ async def process_new_video_message(msg: Message):
         file_name=getattr(msg.video, "file_name", ""),
         size=getattr(msg.video, "file_size", 0)
     )
-
     if added and config.ADMIN_ID:
         series = added["series"]
         ep = added["episode"]
@@ -50,7 +48,8 @@ async def process_new_video_message(msg: Message):
             f"🔗 目录已实时刷新，用户可直接播放"
         )
 
-# 处理器1：普通消息模式（测试/部分场景）
+
+# 处理器1：普通消息模式
 @dp.message(
     F.chat.id == TARGET_CHANNEL_ID,
     F.content_type == ContentType.VIDEO
@@ -58,13 +57,15 @@ async def process_new_video_message(msg: Message):
 async def on_channel_video_message(msg: Message):
     await process_new_video_message(msg)
 
-# 处理器2：频道广播模式（标准场景，aiogram 3.x 必需）
+
+# 处理器2：频道广播模式
 @dp.channel_post(
     F.chat.id == TARGET_CHANNEL_ID,
     F.content_type == ContentType.VIDEO
 )
 async def on_channel_video_post(msg: Message):
     await process_new_video_message(msg)
+
 
 # ─── 用户交互 ───
 @dp.message(CommandStart())
@@ -75,6 +76,7 @@ async def cmd_start(msg: Message):
         f"选择剧集浏览，新视频自动同步 ✅",
         reply_markup=build_series_menu()
     )
+
 
 @dp.message(F.text & ~F.text.startswith("/"))
 async def do_search(msg: Message):
@@ -88,26 +90,28 @@ async def do_search(msg: Message):
         reply_markup=build_series_menu(list_override=results)
     )
 
+
+# ✅ 修正：回调处理函数参数名保持一致 + 补充缺失返回
 @dp.callback_query(Nav.filter())
-async def on_nav(cq: CallbackQuery, data: Nav):
-    if data.act == "series":
+async def on_nav(cq: CallbackQuery, callback_data: Nav):
+    if callback_data.act == "series":
         await cq.message.edit_text(
             "📺 全部剧集",
-            reply_markup=build_series_menu(page=data.page)
+            reply_markup=build_series_menu(page=callback_data.page)
         )
         await cq.answer()
         return
 
-    if data.act == "eps":
+    if callback_data.act == "eps":
         await cq.message.edit_text(
-            f"📺 {data.name}\n已收录自动展示全部集数，⏳ 为待补",
-            reply_markup=build_episode_menu(data.name, page=data.page)
+            f"📺 {callback_data.name}\n已收录自动展示全部集数，⏳ 为待补",
+            reply_markup=build_episode_menu(callback_data.name, page=callback_data.page)
         )
         await cq.answer()
         return
 
-    if data.act == "play":
-        video = db.get_video_by_id(data.vid)
+    if callback_data.act == "play":
+        video = db.get_video_by_id(callback_data.vid)
         if not video or not video.get("file_id"):
             await cq.answer("该集暂未收录，请等待更新", show_alert=True)
             return
@@ -122,9 +126,11 @@ async def on_nav(cq: CallbackQuery, data: Nav):
         await cq.answer("播放已开始 ✅")
         return
 
+
 @dp.callback_query(F.data == "noop")
 async def noop(cq: CallbackQuery):
     await cq.answer("该集尚未更新，请等待上传", show_alert=True)
+
 
 @dp.message(Command("reload"))
 async def reload_cmd(msg: Message):
@@ -134,12 +140,12 @@ async def reload_cmd(msg: Message):
     db.load_data()
     await msg.answer("✅ 目录已重新加载")
 
+
 async def main():
     if not config.BOT_TOKEN or not config.CHANNEL_ID:
         print("❌ 请检查环境变量：BOT_TOKEN / CHANNEL_ID 必填")
         return
     print(f"🤖 启动成功，监听频道: {config.CHANNEL_ID}")
-    # 显式指定更新类型，减少无效流量
     await dp.start_polling(
         bot,
         allowed_updates=[
@@ -148,6 +154,7 @@ async def main():
             UpdateType.CHANNEL_POST
         ]
     )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
