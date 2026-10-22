@@ -38,19 +38,8 @@ async def process_new_video_message(msg: Message):
         size=getattr(msg.video, "file_size", 0)
     )
     
-    if added and config.ADMIN_ID:
-        series = added["series"]
-        ep = added["episode"]
-        total = db.series_info.get(series, {}).get("total", ep or 1)
-        await bot.send_message(
-            config.ADMIN_ID,
-            f"✅ 自动收录成功\n"
-            f"📺 剧名：{series}\n"
-            f"📝 集数：第{ep}集 / 共{total}集\n"
-            f"📹 标题：{added['title']}\n"
-            f"⏱ 时长：{duration//60}:{duration%60:02d}\n"
-            f"🔗 目录已实时刷新，用户可直接播放"
-        )
+    # ✅ 已移除管理员通知，静默收录，不发任何消息
+    return
 
 
 @dp.message(F.chat.id == TARGET_CHANNEL_ID, F.content_type == ContentType.VIDEO)
