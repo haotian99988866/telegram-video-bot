@@ -6,9 +6,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ContentType, UpdateType
 from config import config
 import database as db
-from keyboard import Nav, build_series_menu, build_episode_menu
+from keyboard import Nav, build_series_menu, build_episode_menu, build_category_menu
 from database import get_all_categories, get_series_by_category
-from keyboard import build_category_menu
 
 bot = Bot(
     token=config.BOT_TOKEN,
@@ -75,8 +74,8 @@ async def cmd_start(msg: Message):
     await msg.answer(
         f"📂 视频目录\n"
         f"共收录 {len(db.series_info)} 部剧集 / {len(db.video_list)} 个视频\n\n"
-        f"选择剧集浏览，新视频自动同步 ✅",
-        reply_markup=build_category_menu()  # ← 改这里
+        f"选择分类浏览，新视频自动同步 ✅",
+        reply_markup=build_category_menu()
     )
 
 
@@ -95,25 +94,70 @@ async def do_search(msg: Message):
 
 # ✅ 修正：回调处理函数参数名保持一致 + 补充缺失返回
 @dp.callback_query(Nav.filter())
-async def on_nav(cq: CallbackQuery, callback_data: Nav):
-    # 新增：进入分类
-    if callback_data.act == "cat":
-        cat = callback_data.cat
-        series_list = get_series_by_category(cat)
+async def on_nav(cq: CallbackQuery, data: Nav):
+    # 返回首页分类
+    if data.act == "home":
+        await cq.message.edit_text(
+            f"📂 视频目录\n"
+            f"共收录 {len(db.series_info)} 部剧集 / {len(db.video_list)} 个视频\n\n"
+            f"选择分类浏览，新视频自动同步 ✅",
+            reply_markup=build_category_menu()
+        )
+        await cq.answer()
+        return
+
+    # 进入分类
+    if data.act == "cat":
+        series_list = get_series_by_category(data.cat)
         if not series_list:
             await cq.message.edit_text(
-                f"📂 {cat}\n暂无内容，稍后更新~",
+                f"📂 {data.cat}\n暂无内容~",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="◀️ 返回", callback_data=Nav(act="home").pack())
+                    InlineKeyboardButton(text="⬅️ 返回", callback_data=Nav(act="home").pack())
                 ]])
             )
             await cq.answer()
             return
         await cq.message.edit_text(
-            f"📂 {cat}\n共 {len(series_list)} 部作品",
+            f"📂 {data.cat}\n共 {len(series_list)} 部作品",
             reply_markup=build_series_menu(list_override=series_list)
         )
         await cq.answer()
+        return
+
+    # 全部剧集列表
+    if data.act == "all":
+        await cq.message.edit_text(
+            "📁 全部剧集",
+            reply_markup=build_series_menu(page=data.page)
+        )
+        await cq.answer()
+        return
+
+    # 进入某部剧集的集数列表
+    if data.act == "eps":
+        await cq.message.edit_text(
+            f"📺 {data.name}\n选择集数：",
+            reply_markup=build_episode_menu(data.name, page=data.page)
+        )
+        await cq.answer()
+        return
+
+    # 播放视频
+    if data.act == "play":
+        video = db.get_video_by_id(data.vid)
+        if not video or not video.get("file_id"):
+            await cq.answer("该集暂未收录，请等待更新", show_alert=True)
+            return
+        await cq.message.answer_video(
+            video=video["file_id"],
+            caption=(
+                f"📺 {video['series']} 第{video['episode']}集\n"
+                f"📹 {video['title']}\n"
+                f"⏱ 时长：{video['duration']//60}:{video['duration']%60:02d}"
+            )
+        )
+        await cq.answer("播放已开始 ✅")
         return
 
     # 新增：返回首页
