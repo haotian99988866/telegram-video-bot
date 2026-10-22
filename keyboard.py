@@ -1,16 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters.callback_data import CallbackData
 from config import config
 import database as db
-
-
-class Nav(CallbackData, prefix="nav"):
-    act: str
-    name: str = ""
-    page: int = 1
-    ep: int = 0
-    vid: int = 0
-    cat: str = ""
 
 
 def build_category_menu() -> InlineKeyboardMarkup:
@@ -20,13 +10,13 @@ def build_category_menu() -> InlineKeyboardMarkup:
         buttons.append([
             InlineKeyboardButton(
                 text=f"📂 {cat}",
-                callback_data=Nav(act="cat", cat=cat).pack()
+                callback_data=f"cat|{cat}|1"
             )
         ])
     buttons.append([
         InlineKeyboardButton(
             text="📁 全部剧集",
-            callback_data=Nav(act="all", page=1).pack()
+            callback_data="all|all|1"
         )
     ])
     buttons.append([
@@ -52,23 +42,23 @@ def build_series_menu(page: int = 1, list_override=None) -> InlineKeyboardMarkup
         buttons.append([
             InlineKeyboardButton(
                 text=f"📺 {name}",
-                callback_data=Nav(act="eps", name=name, page=1).pack()
+                callback_data=f"eps|{name}|1"
             )
         ])
     nav_row = []
     if page > 1:
         nav_row.append(InlineKeyboardButton(
-            text="◀️", callback_data=Nav(act="all", page=page - 1).pack()
+            text="◀️", callback_data=f"all|all|{page-1}"
         ))
     if page < total_pages:
         nav_row.append(InlineKeyboardButton(
-            text="▶️", callback_data=Nav(act="all", page=page + 1).pack()
+            text="▶️", callback_data=f"all|all|{page+1}"
         ))
     if nav_row:
         buttons.append(nav_row)
     buttons.append([InlineKeyboardButton(
         text="⬅️ 返回分类",
-        callback_data=Nav(act="home").pack()
+        callback_data="home|home|1"
     )])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -86,10 +76,11 @@ def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
     row = []
     for idx, it in enumerate(page_items):
         ep = it["episode"]
+        vid = it["video"]["id"]
         if it["available"]:
             btn = InlineKeyboardButton(
                 text=f"✅ 第{ep}集",
-                callback_data=Nav(act="play", name=series_name, ep=ep, vid=it["video"]["id"]).pack()
+                callback_data=f"play|{series_name}|{ep}|{vid}"
             )
         else:
             btn = InlineKeyboardButton(
@@ -103,16 +94,16 @@ def build_episode_menu(series_name: str, page: int = 1) -> InlineKeyboardMarkup:
     nav_row = [
         InlineKeyboardButton(
             text="⬅️ 返回",
-            callback_data=Nav(act="home").pack()
+            callback_data="home|home|1"
         )
     ]
     if page > 1:
         nav_row.insert(0, InlineKeyboardButton(
-            text="◀️", callback_data=Nav(act="eps", name=series_name, page=page - 1).pack()
+            text="◀️", callback_data=f"eps|{series_name}|{page-1}"
         ))
     if page < total_pages:
         nav_row.append(InlineKeyboardButton(
-            text="▶️", callback_data=Nav(act="eps", name=series_name, page=page + 1).pack()
+            text="▶️", callback_data=f"eps|{series_name}|{page+1}"
         ))
     buttons.append(nav_row)
     return InlineKeyboardMarkup(inline_keyboard=buttons)
