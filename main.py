@@ -6,7 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ContentType, UpdateType
 from config import config
 import database as db
-from keyboard import Nav, build_series_menu, build_episode_menu, build_category_menu
+from keyboard import build_series_menu, build_episode_menu, build_category_menu
 from database import get_series_by_category
 
 bot = Bot(
@@ -15,13 +15,11 @@ bot = Bot(
 )
 dp = Dispatcher()
 
-# 统一频道ID格式
 TARGET_CHANNEL_ID = config.CHANNEL_ID
 if TARGET_CHANNEL_ID.startswith("-"):
     TARGET_CHANNEL_ID = int(TARGET_CHANNEL_ID)
 
 
-# ─── 核心：监听频道新视频 ───
 async def process_new_video_message(msg: Message):
     title = (msg.caption or "").strip() or f"视频 {msg.message_id}"
     file_id = msg.video.file_id
@@ -49,23 +47,16 @@ async def process_new_video_message(msg: Message):
         )
 
 
-@dp.message(
-    F.chat.id == TARGET_CHANNEL_ID,
-    F.content_type == ContentType.VIDEO
-)
+@dp.message(F.chat.id == TARGET_CHANNEL_ID, F.content_type == ContentType.VIDEO)
 async def on_channel_video_message(msg: Message):
     await process_new_video_message(msg)
 
 
-@dp.channel_post(
-    F.chat.id == TARGET_CHANNEL_ID,
-    F.content_type == ContentType.VIDEO
-)
+@dp.channel_post(F.chat.id == TARGET_CHANNEL_ID, F.content_type == ContentType.VIDEO)
 async def on_channel_video_post(msg: Message):
     await process_new_video_message(msg)
 
 
-# ─── 用户交互 ───
 @dp.message(CommandStart())
 async def cmd_start(msg: Message):
     await msg.answer(
@@ -89,11 +80,18 @@ async def do_search(msg: Message):
     )
 
 
-# ✅ 修复：统一参数名，删除重复代码
-@dp.callback_query(Nav.filter())
-async def on_nav(cq: CallbackQuery, data: Nav):
-    # 返回首页分类
-    if data.act == "home":
+# ✅ 核心：用简单字符串拆分，100% 匹配
+@dp.callback_query(F.data != "noop")
+async def on_nav(cq: CallbackQuery):
+    data = cq.data.split("|")
+    act = data[0]
+    param1 = data[1] if len(data) > 1 else ""
+    param2 = int(data[2]) if len(data) > 2 and data[2].isdigit() else 1
+    param3 = int(data[3]) if len(data) > 3 and data[3].isdigit() else 0
+
+    print(f"回调: act={act}, p1={param1}, p2={param2}")
+
+    if act == "home":
         await cq.message.edit_text(
             f"📂 视频目录\n"
             f"共收录 {len(db.series_info)} 部剧集 / {len(db.video_list)} 个视频\n\n"
@@ -103,46 +101,42 @@ async def on_nav(cq: CallbackQuery, data: Nav):
         await cq.answer()
         return
 
-    # 进入分类 —— 点击「电视剧」走这里 ✅
-    if data.act == "cat":
-        series_list = get_series_by_category(data.cat)
+    if act == "cat":
+        series_list = get_series_by_category(param1)
         if not series_list:
             await cq.message.edit_text(
-                f"📂 {data.cat}\n暂无内容~",
+                f"📂 {param1}\n暂无内容~",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="⬅️ 返回", callback_data=Nav(act="home").pack())
+                    InlineKeyboardButton(text="⬅️ 返回", callback_data="home|home|1")
                 ]])
             )
             await cq.answer()
             return
         await cq.message.edit_text(
-            f"📂 {data.cat}\n共 {len(series_list)} 部作品",
+            f"📂 {param1}\n共 {len(series_list)} 部作品",
             reply_markup=build_series_menu(list_override=series_list)
         )
         await cq.answer()
         return
 
-    # 全部剧集列表
-    if data.act == "all":
+    if act == "all":
         await cq.message.edit_text(
             "📁 全部剧集",
-            reply_markup=build_series_menu(page=data.page)
+            reply_markup=build_series_menu(page=param2)
         )
         await cq.answer()
         return
 
-    # 进入某部剧集的集数列表
-    if data.act == "eps":
+    if act == "eps":
         await cq.message.edit_text(
-            f"📺 {data.name}\n选择集数：",
-            reply_markup=build_episode_menu(data.name, page=data.page)
+            f"📺 {param1}\n选择集数：",
+            reply_markup=build_episode_menu(param1, page=param2)
         )
         await cq.answer()
         return
 
-    # 播放视频
-    if data.act == "play":
-        video = db.get_video_by_id(data.vid)
+    if act == "play":
+        video = db.get_video_by_id(param3)
         if not video or not video.get("file_id"):
             await cq.answer("该集暂未收录，请等待更新", show_alert=True)
             return
