@@ -16,15 +16,15 @@ def parse_title_info(text: str) -> Tuple[str, Optional[int], str, str]:
     name_match = re.search(r"《(.+?)》", text)
     series_name = name_match.group(1).strip() if name_match else "其他"
 
-    # 优先从标签识别：#电视剧 #综艺 #电影 #动漫
+        # 识别类型：优先匹配标签 #电视剧 #综艺 #电影 #动漫 #美剧 #英剧 等
     media_type = "其他"
-    if re.search(r"#电视剧|电视剧|英/美剧|美剧|英剧|韩剧|日剧", text):
+    if re.search(r"#电视剧|电视剧|#美剧|美剧|#英剧|英剧|#韩剧|韩剧|#日剧|日剧|剧集|剧", text):
         media_type = "电视剧"
     elif re.search(r"#综艺|综艺|真人秀|晚会|访谈|脱口秀", text):
         media_type = "综艺"
     elif re.search(r"#电影|电影|影片|院线|剧场版", text):
         media_type = "电影"
-    elif re.search(r"#动漫|动漫|动画|番剧|日漫|国漫", text):
+    elif re.search(r"#动漫|动漫|动画|番剧|#日漫|日漫|#国漫|国漫", text):
         media_type = "动漫"
 
     # 识别集数 —— 适配「第一集01」「第六集06」格式
