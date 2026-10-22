@@ -16,22 +16,18 @@ def parse_title_info(text: str) -> Tuple[str, Optional[int], str, str]:
     name_match = re.search(r"《(.+?)》", text)
     series_name = name_match.group(1).strip() if name_match else "其他"
 
-    # 识别类型：从标题/标签中提取
+    # 优先从标签识别：#电视剧 #综艺 #电影 #动漫
     media_type = "其他"
-    if re.search(r"电视剧|剧集|剧", text):
+    if re.search(r"#电视剧|电视剧|英/美剧|美剧|英剧|韩剧|日剧", text):
         media_type = "电视剧"
-    elif re.search(r"综艺|真人秀|晚会|访谈", text):
+    elif re.search(r"#综艺|综艺|真人秀|晚会|访谈|脱口秀", text):
         media_type = "综艺"
-    elif re.search(r"电影|影片|院线", text):
+    elif re.search(r"#电影|电影|影片|院线|剧场版", text):
         media_type = "电影"
-    elif re.search(r"动漫|动画|番剧|漫画", text):
+    elif re.search(r"#动漫|动漫|动画|番剧|日漫|国漫", text):
         media_type = "动漫"
-    elif re.search(r"日漫|日版", text):
-        media_type = "动漫"
-    elif re.search(r"英/美剧|英剧|美剧|欧美", text):
-        media_type = "电视剧"
 
-    # 识别集数
+    # 识别集数 —— 适配「第一集01」「第六集06」格式
     ep_match = re.search(r"第(?:[一二三四五六七八九十百千万]+|\d+)\s*集\s*(\d+)", text)
     if not ep_match:
         ep_match = re.search(r"集\s*(\d+)|(\d+)\s*集", text)
@@ -42,7 +38,6 @@ def parse_title_info(text: str) -> Tuple[str, Optional[int], str, str]:
             episode = int(num_str)
 
     return series_name, episode, text, media_type
-
 def _save_index():
     with open(VIDEO_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(video_list, f, ensure_ascii=False, indent=2)
@@ -118,6 +113,7 @@ def add_video(message_id: int, title: str, file_id: str, duration: int, **extra)
         "title": title,
         "series": series,
         "episode": episode,
+        "media_type": media_type,
         "file_id": file_id,
         "duration": duration,
         **extra
@@ -171,5 +167,18 @@ def get_series_by_category(category: str) -> List[str]:
         if v.get("media_type", "其他") == category:
             names.add(v["series"])
     return sorted(names)
+def get_all_categories() -> List[str]:
+    seen = set()
+    order = ["电视剧", "综艺", "电影", "动漫", "其他"]
+    for v in video_list:
+        seen.add(v.get("media_type", "其他"))
+    return [c for c in order if c in seen] + sorted(seen - set(order))
 
+def get_series_by_category(category: str) -> List[str]:
+    names = set()
+    for v in video_list:
+        if v.get("media_type", "其他") == category:
+            names.add(v["series"])
+    return sorted(names)
+    
 load_data()
