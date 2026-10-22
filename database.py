@@ -11,27 +11,37 @@ video_list: List[Dict] = []
 series_info: Dict[str, Dict] = {}
 message_id_set: set[int] = set()
 
-def parse_title_info(text: str) -> Tuple[str, Optional[int], str]:
+def parse_title_info(text: str) -> Tuple[str, Optional[int], str, str]:
     text = text.strip() or "未命名视频"
     name_match = re.search(r"《(.+?)》", text)
     series_name = name_match.group(1).strip() if name_match else "其他"
 
-    # 优先匹配：「第XX集」后面紧跟/紧邻的阿拉伯数字 —— 适配「第一集01」「第六集06」
+    # 识别类型：从标题/标签中提取
+    media_type = "其他"
+    if re.search(r"电视剧|剧集|剧", text):
+        media_type = "电视剧"
+    elif re.search(r"综艺|真人秀|晚会|访谈", text):
+        media_type = "综艺"
+    elif re.search(r"电影|影片|院线", text):
+        media_type = "电影"
+    elif re.search(r"动漫|动画|番剧|漫画", text):
+        media_type = "动漫"
+    elif re.search(r"日漫|日版", text):
+        media_type = "动漫"
+    elif re.search(r"英/美剧|英剧|美剧|欧美", text):
+        media_type = "电视剧"
+
+    # 识别集数
     ep_match = re.search(r"第(?:[一二三四五六七八九十百千万]+|\d+)\s*集\s*(\d+)", text)
     if not ep_match:
-        # 备用：直接抓「集」前后的数字 —— 兼容更多格式
         ep_match = re.search(r"集\s*(\d+)|(\d+)\s*集", text)
-    if not ep_match:
-        # 兜底：找标题里最后一串数字（排除版本号/分辨率如4K）
-        ep_match = re.search(r"(?<!\d)(\d{1,3})(?!\d)[^K]", text)
-
     episode = None
     if ep_match:
         num_str = ep_match.group(1) or ep_match.group(2)
         if num_str:
             episode = int(num_str)
 
-    return series_name, episode, text
+    return series_name, episode, text, media_type
 
 def _save_index():
     with open(VIDEO_DB_FILE, "w", encoding="utf-8") as f:
