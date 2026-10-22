@@ -11,66 +11,119 @@ video_list: List[Dict] = []
 series_info: Dict[str, Dict] = {}
 message_id_set: set[int] = set()
 
-import re
-from typing import Tuple, Optional
 
-def parse_title_info(text: str) -> Tuple[str, Optional[int], str, str]:
-    text = text.strip() or "未命名视频"
+def parse_title_info(text: str) -> dict:
+    """解析标题，固定7分类：电视剧/综艺/电影/动漫/英美剧/日韩剧/网剧"""
+    if not text:
+        return {"name": "未知剧集", "episode": None, "season": 1, "duration": None, "tags": [], "media_type": "其他"}
     
-    # 1️⃣ 提取剧名
-    name_match = re.search(r"《(.+?)》", text)
-    series_name = name_match.group(1).strip() if name_match else "其他"
-
-    # 2️⃣ 识别类型
-    media_type = "其他"
-    if re.search(r"#电视剧|电视剧|#美剧|美剧|#英剧|英剧|#韩剧|韩剧|#日剧|日剧|剧集|剧", text):
-        media_type = "电视剧"
-    elif re.search(r"#综艺|综艺|真人秀|晚会|访谈|脱口秀", text):
-        media_type = "综艺"
-    elif re.search(r"#电影|电影|影片|院线|剧场版", text):
-        media_type = "电影"
-    elif re.search(r"#动漫|动漫|动画|番剧|#日漫|日漫|#国漫|国漫", text):
-        media_type = "动漫"
-
-    # 3️⃣ 强化集数识别 —— 兼容所有格式 ✅
+    # 处理列表型文本结构
+    if isinstance(text, list):
+        full_text = ""
+        for part in text:
+            if isinstance(part, dict):
+                full_text += part.get("text", "")
+            else:
+                full_text += str(part)
+    else:
+        full_text = str(text)
+    
+    # 提取剧名
+    name_match = re.search(r"《([^》]+)》", full_text)
+    series_name = name_match.group(1).strip() if name_match else "未知剧集"
+    
+    # 汉字数字转阿拉伯数字
+    hanzi_map = {
+        "零":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,
+        "十":10,"十一":11,"十二":12,"十三":13,"十四":14,"十五":15,"十六":16,
+        "十七":17,"十八":18,"十九":19,"二十":20,"二十一":21,"二十二":22,
+        "二十三":23,"二十四":24,"二十五":25,"二十六":26,"二十七":27,
+        "二十八":28,"二十九":29,"三十":30
+    }
+    
+    def hanzi_to_num(s):
+        if not s: return None
+        if s.isdigit(): return int(s)
+        for length in (3, 2, 1):
+            if s[:length] in hanzi_map:
+                return hanzi_map[s[:length]]
+        return None
+    
+    # 提取季数
+    season = 1
+    season_match = re.search(r"第\s*([零一二三四五六七八九十百\d]+)\s*季", full_text)
+    if season_match:
+        s_val = season_match.group(1)
+        season = int(s_val) if s_val.isdigit() else hanzi_to_num(s_val) or 1
+    
+    # 提取集数
     episode = None
-    
-    # 格式A：第4集 / 第四集 / 第04集
-    ep_match = re.search(r"第([一二三四五六七八九十百千万\d]+)集", text)
+    ep_match = re.search(r"第\s*([零一二三四五六七八九十百\d]+)\s*集", full_text)
     if ep_match:
-        num_text = ep_match.group(1)
-        if num_text.isdigit():
-            episode = int(num_text)
-        else:
-            # 中文数字转阿拉伯（简单常用）
-            cn_map = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10}
-            episode = cn_map.get(num_text)
+        e_val = ep_match.group(1)
+        episode = int(e_val) if e_val.isdigit() else hanzi_to_num(e_val)
     
-    # 格式B：第04集04 / 第七集07 → 取后面数字
-    if not episode:
-        ep_match = re.search(r"集\s*(\d{1,3})", text)
-        if ep_match:
-            episode = int(ep_match.group(1))
+    if not episode or episode != 20:
+        num_at_end = re.search(r"(\d+)\s*(?:#|$)", full_text)
+        if num_at_end:
+            episode = int(num_at_end.group(1))
     
-    # 格式C：04集 / 第4季第2集 / S01E04
-    if not episode:
-        ep_match = re.search(r"(\d{1,3})集", text)
-        if ep_match:
-            episode = int(ep_match.group(1))
+    # 提取时长
+    duration = None
+    dur_match = re.search(r"时长[：:]\s*(\d+[:：]\d+)", full_text)
+    if dur_match:
+        duration = dur_match.group(1).replace("：", ":")
     
-    # 格式D：E04 / 第4集 / - 04 -
-    if not episode:
-        ep_match = re.search(r"[Ee](\d{1,3})", text)
-        if ep_match:
-            episode = int(ep_match.group(1))
+    # 提取标签
+    tags = re.findall(r"#(\w+)", full_text)
     
-    # 格式E：剧名 04 / 剧名 第4部分（兜底：连续数字当作集数）
-    if not episode:
-        ep_match = re.search(r"\b0*([1-9]\d?)\b", text.replace(series_name, ""))
-        if ep_match:
-            episode = int(ep_match.group(1))
+    # ========== 固定7分类识别 ==========
+    media_type = "其他"
+    
+    # 优先级1：标签精准匹配
+    if "#电视剧" in full_text:
+        media_type = "电视剧"
+    elif "#综艺" in full_text:
+        media_type = "综艺"
+    elif "#电影" in full_text:
+        media_type = "电影"
+    elif "#动漫" in full_text or "#日漫" in full_text:
+        media_type = "动漫/日漫"
+    elif "#英剧" in full_text or "#美剧" in full_text or "#英/美剧" in full_text:
+        media_type = "英/美剧"
+    elif "#日剧" in full_text or "#韩剧" in full_text or "#日韩剧" in full_text:
+        media_type = "日韩剧"
+    elif "#网剧" in full_text:
+        media_type = "网剧"
+    
+    # 优先级2：关键词智能推测
+    else:
+        if any(word in full_text for word in ["英剧", "美剧", "英美", "美国", "英国"]):
+            media_type = "英/美剧"
+        elif any(word in full_text for word in ["日剧", "韩剧", "日韩", "韩国", "日本"]):
+            media_type = "日韩剧"
+        elif any(word in full_text for word in ["动漫", "动画", "卡通", "日漫"]):
+            media_type = "动漫/日漫"
+        elif any(word in full_text for word in ["网剧", "网络剧", "独播"]):
+            media_type = "网剧"
+        elif any(word in full_text for word in ["综艺", "节目", "晚会", "真人秀"]):
+            media_type = "综艺"
+        elif any(word in full_text for word in ["电影", "剧场版", "影片"]):
+            media_type = "电影"
+        elif any(word in full_text for word in ["第", "集", "季"]):
+            media_type = "电视剧"
+    
+    return {
+        "name": series_name,
+        "episode": episode,
+        "season": season,
+        "duration": duration,
+        "tags": tags,
+        "media_type": media_type,
+        "raw_text": full_text
+    }
 
-    return series_name, episode, text, media_type
+
 def _save_index():
     with open(VIDEO_DB_FILE, "w", encoding="utf-8") as f:
         json.dump(video_list, f, ensure_ascii=False, indent=2)
@@ -123,7 +176,6 @@ def load_data():
                     if mid in message_id_set:
                         continue
                     
-                    # 提取标题
                     text_parts = []
                     entities = msg.get("text_entities", [])
                     if isinstance(entities, list):
@@ -134,19 +186,17 @@ def load_data():
                                 text_parts.append(str(e))
                     title = "".join(text_parts).strip() or "未命名视频"
                     
-                    # 解析信息
                     info = parse_title_info(title)
                     series = info["name"]
                     ep = info["episode"]
                     media_type = info["media_type"]
                     
-                    # 无集数自动编号
                     if ep is None:
                         same_count = sum(1 for v in video_list if v["series"] == series)
                         ep = same_count + 1
                         print(f"🔢 自动编号: [{series}] → 第{ep}集")
                     
-                    file_id = ""  # 导出文件不含真实ID
+                    file_id = ""
                     duration = msg.get("duration_seconds", 0)
                     file_name = msg.get("file_name", "")
                     size = msg.get("file_size", 0)
@@ -207,7 +257,7 @@ def add_video(message_id: int, title: str, file_id: str, duration: int, **extra)
     message_id_set.add(message_id)
     _save_index()
     _rebuild_series_info()
-    print(f"🆕 新增: {series} 第{episode}集 file_id={file_id[:12]}...")
+    print(f"🆕 新增: {series} 第{episode}集 [{media_type}] file_id={file_id[:12]}...")
     return video
 
 
@@ -242,11 +292,13 @@ def get_video_by_id(vid: int) -> Optional[Dict]:
 
 
 def get_all_categories():
+    # 严格按你指定的固定顺序显示
+    fixed_order = ["电视剧", "综艺", "电影", "动漫/日漫", "英/美剧", "日韩剧", "网剧"]
     seen = set()
-    order = ["电视剧", "综艺", "电影", "动漫", "其他"]
     for v in video_list:
         seen.add(v.get("media_type", "其他"))
-    return [c for c in order if c in seen] + sorted(seen - set(order))
+    # 只显示有内容的分类，保持固定顺序
+    return [cat for cat in fixed_order if cat in seen]
 
 
 def get_series_by_category(category):
