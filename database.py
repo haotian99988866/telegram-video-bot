@@ -92,6 +92,7 @@ def load_data():
                     "title": title,
                     "series": series,
                     "episode": ep,
+                    "media_type": media_type,  # ← 新增
                     "file_id": msg.get("file_id", ""),
                     "duration": msg.get("duration_seconds", 0),
                     "file_name": msg.get("file_name", ""),
@@ -109,7 +110,7 @@ def load_data():
 def add_video(message_id: int, title: str, file_id: str, duration: int, **extra) -> Optional[Dict]:
     if message_id in message_id_set:
         return None
-    series, episode, _ = parse_title_info(title)
+    series, episode, _, media_type = parse_title_info(title)
     new_id = max((v["id"] for v in video_list), default=0) + 1
     video = {
         "id": new_id,
@@ -155,5 +156,20 @@ def search_series_by_keyword(keyword: str) -> List[str]:
 
 def get_video_by_id(vid: int) -> Optional[Dict]:
     return next((v for v in video_list if v["id"] == vid), None)
+
+def get_all_categories() -> List[str]:
+    """获取所有分类"""
+    cats = set()
+    for v in video_list:
+        cats.add(v.get("media_type", "其他"))
+    return sorted(cats)
+
+def get_series_by_category(category: str) -> List[str]:
+    """按分类获取剧名列表"""
+    names = set()
+    for v in video_list:
+        if v.get("media_type", "其他") == category:
+            names.add(v["series"])
+    return sorted(names)
 
 load_data()
